@@ -315,7 +315,10 @@ public class Board
 
     public (int, int, int, int) DetermineSafetyMove(int pieceRow, int pieceCol)
     {
+        // new overall function change -> if highest piece in danger after saftey move is higher than the original one, don't do it
+
         var (validMoves, _) = GameBoard[pieceRow, pieceCol]!.GetValidMoves(this);
+        int pieceInDangerScore = GameBoard[pieceRow, pieceCol]!.Score;
 
         // first, check if the piece can attack the piece putting it in danger
         for (int row = 0; row < 8; row++)
@@ -366,6 +369,8 @@ public class Board
                 }
             }
         }
+
+        // -> I dont think this is working as expected, check it 
 
         // second, check if any of our pieces can take the attacking piece
         // if it is not safe, ensure the score is valuable
@@ -484,16 +489,51 @@ public class Board
                 }
             }
         }
-
-        // if no attacks can be made, make the first possible safe move
-        Console.WriteLine("Doing final return from saftey move");
+        
+        // make first possible safe move, ensuring heighest piece in danger does not increase
         for (int i = 0; i < validMoves.Count; i++)
         {
+            bool makeMove = true;
             if (IsPosSafe(validMoves[i].EndRow, validMoves[i].EndCol))
             {
-                int newRow = validMoves[i].EndRow;
-                int newCol = validMoves[i].EndCol;
-                return (pieceRow, pieceCol, newRow, newCol);
+                Board testBoard = CopyBoard();
+                testBoard.GameBoard[validMoves[i].EndRow, validMoves[i].EndCol] = testBoard.GameBoard[pieceRow, pieceCol];
+                testBoard.GameBoard[pieceRow, pieceCol] = null;
+
+                testBoard.GameBoard[validMoves[i].EndRow, validMoves[i].EndCol]!.RowPos = validMoves[i].EndRow;
+                testBoard.GameBoard[validMoves[i].EndRow, validMoves[i].EndCol]!.ColPos = validMoves[i].EndCol;
+                for (int row = 0; row < 8; row++)
+                {
+                    for (int col = 0; col < 8; col++)
+                    {
+                        if (testBoard.IsOccupied(row, col))
+                        {
+                            if (testBoard.IsEnemy(row, col))
+                            {
+                                var attacks = testBoard.GameBoard[row, col]!.GetEnemyAttacks(testBoard);
+                                for (int j = 0; j < attacks.Count; j++)
+                                {
+                                    var teamPiece = testBoard.GameBoard[attacks[j].EndRow, attacks[j].EndCol];
+                                    if (teamPiece != null)
+                                    {
+                                        if (teamPiece.Score > pieceInDangerScore)
+                                        {
+                                            makeMove = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (makeMove)
+                {
+                    int newRow = validMoves[i].EndRow;
+                    int newCol = validMoves[i].EndCol;
+                    return (pieceRow, pieceCol, newRow, newCol);
+                }   
             }
         }
 
@@ -503,6 +543,143 @@ public class Board
 
     public (int, int, int, int) DetermineNextMove()
     {
+        // need to check if our king is in check
+        if (IsKingInCheck("BLACK"))
+        {
+            // first, check if the piece targeting our king can be safely taken
+            // or if it can be taken with a good trade off
+            // (if only one piece is targeting our king, this can be done)
+            int attackingPieceCount = 0;
+            int attackingPieceStartRow = 0;
+            int attackingPieceStartCol = 0;
+            (int kingRow, int kingCol) = KingPos("BLACK");
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (IsOccupied(row, col))
+                    {
+                        if (IsEnemy(row, col))
+                        {
+                            var attacks = GameBoard[row, col]!.GetEnemyAttacks(this);
+                            for (int i = 0; i < attacks.Count; i++)
+                            {
+                                if (attacks[i].EndRow == kingRow && attacks[i].EndCol == kingCol)
+                                {
+                                    attackingPieceStartRow = attacks[i].StartRow;
+                                    attackingPieceStartCol = attacks[i].StartCol;
+                                    attackingPieceCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // see if we can take the attacking piece if safe or good trade off
+            if (attackingPieceCount == 1)
+            {
+                int attackingPieceScore = GameBoard[attackingPieceStartRow, attackingPieceStartCol]!.Score;
+                for (int row = 0; row < 8; row++)
+                {
+                    for (int col = 0; col < 8; col++)
+                    {
+                        if (IsOccupied(row, col))
+                        {
+                            if (!IsEnemy(row, col))
+                            {
+                                var (_, teamAttacks) = GameBoard[row, col]!.GetValidMoves(this);
+                                // first, check if it is safe to take the piece
+                                for (int i = 0; i < teamAttacks.Count; i++)
+                                {
+                                    if (teamAttacks[i].EndRow == attackingPieceStartRow && teamAttacks[i].EndCol == attackingPieceStartCol)
+                                    {
+                                        Board testBoard = CopyBoard();
+                                        testBoard.GameBoard[attackingPieceStartRow, attackingPieceStartCol] = testBoard.GameBoard[teamAttacks[i].StartRow, teamAttacks[i].StartCol];
+                                        testBoard.GameBoard[teamAttacks[i].StartRow, teamAttacks[i].StartCol] = null;
+
+                                        testBoard.GameBoard[attackingPieceStartRow, attackingPieceStartCol]!.RowPos = attackingPieceStartRow;
+                                        testBoard.GameBoard[attackingPieceStartRow, attackingPieceStartCol]!.ColPos = attackingPieceStartCol;
+
+                                        if (testBoard.IsPosSafe(attackingPieceStartRow, attackingPieceStartCol))
+                                        {
+                                            return (teamAttacks[i].StartRow, teamAttacks[i].StartCol, teamAttacks[i].EndRow, teamAttacks[i].EndCol);
+                                        }
+                                    }
+                                }
+
+                                // if no safe move, check if a good trade off can be done
+                                for (int i = 0; i < teamAttacks.Count; i++)
+                                {
+                                    // last check in if is to make sure we are not moving our king to attack the attacking piece as position is not safe
+                                    if (teamAttacks[i].EndRow == attackingPieceStartRow && teamAttacks[i].EndCol == attackingPieceStartCol && GameBoard[teamAttacks[i].StartRow, teamAttacks[i].StartCol]!.Score != 99)
+                                    {
+                                        if (GameBoard[teamAttacks[i].StartRow, teamAttacks[i].StartCol]!.Score > attackingPieceScore)
+                                        {
+                                            return (teamAttacks[i].StartRow, teamAttacks[i].StartCol, teamAttacks[i].EndRow, teamAttacks[i].EndCol);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // if the attacking piece can not be taken, determine if king can be moved to a safe positon
+            (int, int)[] offsets = new (int, int)[]
+            {
+                (0, 1), (0, -1), (1, 0), (-1, 0),
+                (1, 1), (-1, 1), (1, -1), (-1, -1)
+            };
+
+            foreach (var offset in offsets)
+            {
+                bool isPosSafe = true;
+                int newRow = kingRow + offset.Item1;
+                int newCol = kingCol + offset.Item2;
+
+                if (newRow < 8 && newRow >= 0 && newCol < 8 && newCol >= 0)
+                {
+                    Board testBoard = CopyBoard();
+                    if (!testBoard.IsOccupied(newRow, newCol) || testBoard.IsEnemy(newRow, newCol))
+                    {
+                        testBoard.GameBoard[newRow, newCol] = testBoard.GameBoard[kingRow, kingCol];
+                        testBoard.GameBoard[kingRow, kingCol] = null;
+
+                        testBoard.GameBoard[newRow, newCol]!.RowPos = newRow;
+                        testBoard.GameBoard[newRow, newCol]!.ColPos = newCol;
+
+                        for (int row = 0; row < 8; row++)
+                        {
+                            for (int col = 0; col < 8; col++)
+                            {
+                                if (testBoard.IsOccupied(row, col))
+                                {
+                                    if (testBoard.IsEnemy(row, col))
+                                    {
+                                        var attacks = testBoard.GameBoard[row, col]!.GetEnemyAttacks(testBoard);
+                                        for (int i = 0; i < attacks.Count; i++)
+                                        {
+                                            if (attacks[i].EndRow == newRow && attacks[i].EndCol == newCol)
+                                            {
+                                                isPosSafe = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (isPosSafe)
+                        {
+                            return (kingRow, kingCol, newRow, newCol);
+                        }
+                    }
+                }
+            }
+        } 
+
         var allMoves = new List<(int startRow, int startCol, int endRow, int endCol)>();
         var allAttacks = new List<(int startRow, int startCol, int endRow, int endCol, int score)>();
 
@@ -532,8 +709,7 @@ public class Board
         // TODO -> if any piece can safely take the attacking piece, do it
 
         (int heighestDangerScore, int dangerRow, int dangerCol) = HighestPieceInDanger(this);
-        Console.WriteLine("Highest score in danger is");
-        Console.WriteLine(heighestDangerScore);
+
 
         if (heighestDangerScore != -1)
         {
@@ -726,6 +902,7 @@ public class Board
         return false;
     }
 
+    // do some further testing with this function
     public bool IsKingInCheckMate(string kingColour)
     {
         // NEED TO ALSO CHECK IF ANOTHER PIECE CAN TAKE THE ATTACKING PIECE
@@ -742,6 +919,57 @@ public class Board
         // -> also need to check if piece on white team can take the attacking piece
         if (kingColour == "WHITE")
         {
+            // if only one piece is attacking the king, check if it can be taken
+            int attackingPieceCount = 0;
+            int attackingPieceStartRow = -1;
+            int attackingPieceStartCol = -1;
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (IsOccupied(row, col))
+                    {
+                        if (!IsEnemy(row, col))
+                        {
+                            var (_, attacks) = GameBoard[row, col]!.GetValidMoves(this);
+                            for (int i = 0; i < attacks.Count; i++)
+                            {
+                                if (attacks[i].EndRow == kingRow && attacks[i].EndCol == kingCol)
+                                {
+                                    attackingPieceStartRow = attacks[i].StartRow;
+                                    attackingPieceStartCol = attacks[i].StartCol;
+                                    attackingPieceCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (attackingPieceCount == 1)
+            {
+                for (int row = 0; row < 8; row++)
+                {
+                    for (int col = 0; col < 8; col++)
+                    {
+                        if (IsOccupied(row, col))
+                        {
+                            if (IsEnemy(row, col))
+                            {
+                                var attacks = GameBoard[row, col]!.GetEnemyAttacks(this);
+                                for (int i = 0; i < attacks.Count; i++)
+                                {
+                                    if (attacks[i].EndRow == attackingPieceStartRow && attacks[i].EndCol == attackingPieceStartCol)
+                                    {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             foreach (var offset in offsets)
             {
                 bool isPosSafe = true;
@@ -793,7 +1021,109 @@ public class Board
         }
         else if (kingColour == "BLACK")
         {
-            // black checkmate logic here
+            // also need to make sure we are making the relevant moves if needed
+            // TODO -> check if one piece is attacking our king, then check if we can take it
+            int attackingPieceCount = 0;
+            int attackingPieceStartRow = -1;
+            int attackingPieceStartCol = -1;
+            for (int row = 0; row < 8; row++)
+            {
+                for (int col = 0; col < 8; col++)
+                {
+                    if (IsOccupied(row, col))
+                    {
+                        if (IsEnemy(row, col))
+                        {
+                            // var (_, attacks) = GameBoard[row, col]!.GetValidMoves(this);
+                            var attacks = GameBoard[row, col]!.GetEnemyAttacks(this);
+                            for (int i = 0; i < attacks.Count; i++)
+                            {
+                                if (attacks[i].EndRow == kingRow && attacks[i].EndCol == kingCol)
+                                {
+                                    attackingPieceStartRow = attacks[i].StartRow;
+                                    attackingPieceStartCol = attacks[i].StartCol;
+                                    attackingPieceCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (attackingPieceCount == 1)
+            {
+                for (int row = 0; row < 8; row++)
+                {
+                    for (int col = 0; col < 8; col++)
+                    {
+                        if (IsOccupied(row, col))
+                        {
+                            if (!IsEnemy(row, col))
+                            {
+                                var (_, attacks) = GameBoard[row, col]!.GetValidMoves(this);
+                                for (int i = 0; i < attacks.Count; i++)
+                                {
+                                    if (attacks[i].EndRow == attackingPieceStartRow && attacks[i].EndCol == attackingPieceStartCol)
+                                    {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            // see if king can be moved to a safe position
+            foreach (var offset in offsets)
+            {
+                bool isPosSafe = true;
+                int newRow = kingRow + offset.Item1;
+                int newCol = kingCol + offset.Item2;
+
+                if (newRow < 8 && newRow >= 0 && newCol < 8 && newCol >= 0)
+                {
+                    Board testBoard = CopyBoard();
+                    if (!testBoard.IsOccupied(newRow, newCol) || testBoard.IsEnemy(newRow, newCol))
+                    {
+                        testBoard.GameBoard[newRow, newCol] = testBoard.GameBoard[kingRow, kingCol];
+                        testBoard.GameBoard[kingRow, kingCol] = null;
+
+                        testBoard.GameBoard[newRow, newCol]!.RowPos = newRow;
+                        testBoard.GameBoard[newRow, newCol]!.ColPos = newCol;
+
+                        for (int row = 0; row < 8; row++)
+                        {
+                            for (int col = 0; col < 8; col++)
+                            {
+                                if (testBoard.IsOccupied(row, col))
+                                {
+                                    if (testBoard.IsEnemy(row, col))
+                                    {
+
+                                        var attacks = testBoard.GameBoard[row, col]!.GetEnemyAttacks(testBoard);
+                                        for (int i = 0; i < attacks.Count; i++)
+                                        {
+                                            if (attacks[i].EndRow == newRow && attacks[i].EndCol == newCol)
+                                            {
+                                                isPosSafe = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (isPosSafe)
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            return true;
         }
 
 

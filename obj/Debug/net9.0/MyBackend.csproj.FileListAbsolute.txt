@@ -21,3 +21,4 @@
 /Users/rileyanderssen/Desktop/CodingProjects/WebChessBot/backend/MyBackend/obj/Debug/net9.0/MyBackend.pdb
 /Users/rileyanderssen/Desktop/CodingProjects/WebChessBot/backend/MyBackend/obj/Debug/net9.0/MyBackend.genruntimeconfig.cache
 /Users/rileyanderssen/Desktop/CodingProjects/WebChessBot/backend/MyBackend/obj/Debug/net9.0/ref/MyBackend.dll
+/Users/rileyanderssen/Desktop/CodingProjects/WebChessBot/backend/MyBackend/obj/Debug/net9.0/MyBackend.sourcelink.json
