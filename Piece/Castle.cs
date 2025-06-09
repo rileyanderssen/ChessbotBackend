@@ -18,7 +18,6 @@ public class Castle : Piece
         int leftCheck = ColPos;
         int rightCheck = ColPos;
 
-
         // check up
         if (upCheck > 0)
         {
@@ -154,7 +153,7 @@ public class Castle : Piece
                     {
                         if (!gameBoard.IsEnemy(downCheck, ColPos))
                         {
-                            attacks.Add((RowPos, ColPos, upCheck, ColPos));
+                            attacks.Add((RowPos, ColPos, downCheck, ColPos));
                         }
 
                         break;
