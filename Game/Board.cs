@@ -814,14 +814,8 @@ public class Board
 
                 if (testBoard.IsPosSafe(moveEndRow, moveEndCol))
                 {
-                    Console.WriteLine("Testing for move");
-                    Console.WriteLine(moveStartRow);
-                    Console.WriteLine(moveStartCol);
-                    Console.WriteLine(moveEndRow);
-                    Console.WriteLine(moveEndCol);
                     if (testBoard.IsKingInCheck("WHITE"))
                     {
-                        Console.WriteLine("Move made - white in check");
                         return (moveStartRow, moveStartCol, moveEndRow, moveEndCol);
                     }
                 }
@@ -851,7 +845,6 @@ public class Board
                 {
                     if (testBoard.IsKingInCheck("WHITE"))
                     {
-                        Console.WriteLine("Attack made - white in check");
                         return (attStartRow, attStartCol, attEndRow, attEndCol);
                     }
                 }
@@ -1036,10 +1029,14 @@ public class Board
                             {
                                 if (attacks[i].EndRow == kingRow && attacks[i].EndCol == kingCol)
                                 {
-                                    if (GameBoard[attacks[i].StartRow, attacks[i].StartCol]!.Color == "BLACK")
+                                    var piece = GameBoard[attacks[i].StartRow, attacks[i].StartCol];
+                                    if (piece != null)
                                     {
-                                        return true;    
-                                    }
+                                        if (piece.Color == "BLACK")
+                                        {
+                                            return true;
+                                        }
+                                    }   
                                 }
                             }
                         }
@@ -1215,7 +1212,6 @@ public class Board
                 }
             }
 
-            Console.WriteLine("RETURNINT TRUE FROM WHITRE CHECKMATE");
             if (!IsKingInCheck("WHITE"))
             {
                 return false;
